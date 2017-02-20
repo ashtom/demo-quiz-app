@@ -8,7 +8,7 @@ import FacebookCore
 import FBSDKLoginKit
 
 class HomeViewController: UIViewController {
-
+    @IBOutlet weak var loginButton: UIButton!
     @IBOutlet weak var playButton: UIButton!
 
     override func viewDidLoad() {
@@ -19,12 +19,8 @@ class HomeViewController: UIViewController {
         
         // STEP 1
         // Mobile Center: Identity -> Show a Facebook login button programmatically
-        let loginButton = LoginButton(readPermissions: [ .publicProfile ]);
         FBSDKProfile.enableUpdates(onAccessTokenChange: true)
-        loginButton.center = view.center;
-        loginButton.delegate = self;
-        view.addSubview(loginButton);
-        
+
         // If there is already an FB access token, skip FB sign in
         if (AccessToken.current != nil) {
             loginToAzureMobileApps();
@@ -43,7 +39,36 @@ class HomeViewController: UIViewController {
         }
     }
 
+    @IBAction func login(_ sender: Any) {
+        let loginManager = LoginManager()
+        if (AccessToken.current != nil) {
+            loginManager.logOut();
+            
+            // Disable play button
+            self.playButton.isEnabled = false;
+            
+            // Cleanup variables stored locally
+            cleanupLocalStorage();
+            
+            // Logout from Azure Mobile Apps
+            logoutFromAzureMobileApps();
+        }
+        else {
+            loginManager.logIn([ .publicProfile ], viewController: self) { loginResult in
+                switch loginResult {
+                case .success:
+                    print(AccessToken.current!);
+                    self.loginToAzureMobileApps();
+                default:
+                    // Do nothing
+                    print("Failed or cancelled");
+                }
+            }
+        }
+    }
+    
     func loginToAzureMobileApps() {
+        self.loginButton.setTitle("Processing…", for: UIControlState.normal);
         
         // STEP 3
         // Mobile Center: Identity -> Pass the authentication token 
@@ -60,6 +85,7 @@ class HomeViewController: UIViewController {
                 
                 // Enable the Play button
                 self.playButton.isEnabled = true;
+                self.loginButton.setTitle("Sign Out", for: UIControlState.normal);
             }
         };
     }
@@ -72,6 +98,7 @@ class HomeViewController: UIViewController {
                 print("Failed Azure Mobile logout with error: %@" + error.debugDescription);
             } else {
                 print("Completed Azure Mobile logout");
+                self.loginButton.setTitle("Sign In", for: UIControlState.normal);
             }
         }
     }
@@ -89,33 +116,3 @@ class HomeViewController: UIViewController {
         // Dispose of any resources that can be recreated.
     }
 }
-
-extension HomeViewController: LoginButtonDelegate {
-    
-    // STEP 2 
-    // Mobile Center: Identity -> When the player 
-    //  logs in successully then login to Azure Mobile Apps
-    func loginButtonDidCompleteLogin(_ loginButton: LoginButton, result: LoginResult) {
-        if (AccessToken.current != nil) {
-            print("Completed FB login via LoginButton");
-            
-            // After signing into Facebook, use the creds to sign 
-            //  in to Azure Mobile Apps for data segregation
-            loginToAzureMobileApps();
-        }
-    }
-    
-    func loginButtonDidLogOut(_ loginButton: LoginButton) {
-        print("Completed FB logout via LoginButton");
-        
-        // Disable the Play button
-        self.playButton.isEnabled = false;
-
-        // Cleanup variables stored locally
-        cleanupLocalStorage();
-        
-        // Logout from Azure Mobile Apps
-        logoutFromAzureMobileApps();
-    }
-}
-
